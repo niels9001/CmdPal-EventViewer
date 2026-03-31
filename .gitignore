@@ -25,6 +25,10 @@ ARM64/
 AppPackages/
 BundleArtifacts/
 
+## Inno Setup / WinGet
+Installer/
+publish/
+
 ## User-specific
 *.rsuser
 *.DotSettings.user

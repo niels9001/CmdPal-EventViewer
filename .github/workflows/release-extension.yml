@@ -1,0 +1,96 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  PROJECT_NAME: EventViewer
+  DOTNET_VERSION: '9.0.x'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Detect version
+        id: version
+        run: |
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Publish
+        run: |
+          dotnet publish EventViewer\EventViewer.csproj -c Release -r win-${{ matrix.arch }} -o publish --self-contained=false -p:WindowsPackageType=None
+
+      - name: Create installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            /DMyAppVersion="${{ steps.version.outputs.VERSION }}" `
+            /DArchitecturesAllowed="${{ matrix.arch }}" `
+            setup-template.iss
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.arch }}
+          path: Installer/*.exe
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.exe
+          generate_release_notes: true
+
+  winget-update:
+    needs: release
+    runs-on: windows-latest
+
+    steps:
+      - name: Install wingetcreate
+        run: |
+          winget install Microsoft.WingetCreate --accept-source-agreements --accept-package-agreements
+
+      - name: Detect version
+        id: version
+        run: |
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Update WinGet manifest
+        run: |
+          $baseUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
+          wingetcreate update niels9001.EventViewerForCommandPalette `
+            --version ${{ steps.version.outputs.VERSION }} `
+            --urls "$baseUrl/${{ env.PROJECT_NAME }}_${{ steps.version.outputs.VERSION }}_x64.exe" "$baseUrl/${{ env.PROJECT_NAME }}_${{ steps.version.outputs.VERSION }}_arm64.exe" `
+            --submit `
+            --token ${{ secrets.WINGET_PAT }}

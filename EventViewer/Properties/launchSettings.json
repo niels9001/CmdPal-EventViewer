@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "EventViewer (Package)": {
+      "commandName": "MsixPackage",
+      "doNotLaunchApp": true
+    },
+    "EventViewer (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

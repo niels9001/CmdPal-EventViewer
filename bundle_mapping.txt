@@ -1,0 +1,3 @@
+[Files]
+"D:\EventViewer\EventViewer\AppPackages\x64\EventViewer_0.0.1.0_Test\EventViewer_0.0.1.0_x64.msix" "EventViewer_0.0.1.0_x64.msix"
+"D:\EventViewer\EventViewer\AppPackages\ARM64\EventViewer_0.0.1.0_Test\EventViewer_0.0.1.0_arm64.msix" "EventViewer_0.0.1.0_arm64.msix"

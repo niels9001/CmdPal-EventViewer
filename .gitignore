@@ -24,6 +24,7 @@ ARM64/
 ## MSIX
 AppPackages/
 BundleArtifacts/
+*.msixbundle
 
 ## Inno Setup / WinGet
 Installer/

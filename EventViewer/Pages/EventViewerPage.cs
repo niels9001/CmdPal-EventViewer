@@ -35,7 +35,7 @@ internal sealed partial class EventViewerPage : ListPage
             var (name, icon) = WindowsLogs[i];
             var displayName = name == "ForwardedEvents" ? "Forwarded Events" : name;
 
-            items[i] = new ListItem(new EventLogListPage(name))
+            items[i] = new ListItem(new EventLogListPage(name, new IconInfo(icon)))
             {
                 Title = displayName,
                 Icon = new IconInfo(icon),

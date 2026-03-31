@@ -21,6 +21,28 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="Assets\Critical.svg" />
+    <None Remove="Assets\Error.svg" />
+    <None Remove="Assets\Info.svg" />
+    <None Remove="Assets\Warning.svg" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\Critical.svg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Error.svg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Info.svg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Warning.svg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 

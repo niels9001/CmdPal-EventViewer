@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using EventViewer.Models;
 using EventViewer.Services;
@@ -19,11 +20,11 @@ internal sealed partial class EventLogListPage : DynamicListPage
     private readonly string _logName;
     private IListItem[] _items = [];
 
-    public EventLogListPage(string logName)
+    public EventLogListPage(string logName, IconInfo icon)
     {
         _logName = logName;
         var displayName = logName == "ForwardedEvents" ? "Forwarded Events" : logName;
-        Icon = new IconInfo("\uE7C3");
+        Icon = icon;
         Title = displayName;
         Name = "View";
         PlaceholderText = "Search events...";
@@ -55,58 +56,7 @@ internal sealed partial class EventLogListPage : DynamicListPage
                 levels: levelFilter,
                 searchText: string.IsNullOrWhiteSpace(searchText) ? null : searchText).ConfigureAwait(false);
 
-            var items = new List<IListItem>(events.Count);
-
-            foreach (var evt in events)
-            {
-                var firstLine = GetFirstLine(evt.Message, 120);
-
-                var subtitle = string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0}  \u00B7  Event ID {1}  \u00B7  {2}",
-                    evt.TimeCreated.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
-                    evt.Id,
-                    evt.ProviderName);
-
-                var keepOpenCommand = new AnonymousCommand(() => { })
-                {
-                    Result = CommandResult.KeepOpen(),
-                };
-
-                items.Add(new ListItem(keepOpenCommand)
-                {
-                    Title = firstLine,
-                    Subtitle = subtitle,
-                    Icon = GetSeverityIcon(evt.Severity),
-                    Tags = [GetSeverityTag(evt.Severity)],
-                    MoreCommands = [
-                        new CommandContextItem(new OpenEventViewerCommand(_logName))
-                        {
-                            Title = "Open in Event Viewer",
-                            Subtitle = "Open this log in the Windows Event Viewer",
-                            Icon = new IconInfo("\uE8A7"),
-                        },
-                        new CommandContextItem(new CopyTextCommand(evt.Message))
-                        {
-                            Title = "Copy message",
-                        },
-                    ],
-                    Details = new Details
-                    {
-                        Title = string.Format(CultureInfo.InvariantCulture, "{0} \u2014 Event {1}", evt.ProviderName, evt.Id),
-                        Body = evt.Message,
-                        Metadata = [
-                            new DetailsElement { Key = "Log name", Data = new DetailsTags { Tags = [new Tag(evt.LogName)] } },
-                            new DetailsElement { Key = "Source", Data = new DetailsTags { Tags = [new Tag(evt.ProviderName)] } },
-                            new DetailsElement { Key = "Event ID", Data = new DetailsTags { Tags = [new Tag(evt.Id.ToString(CultureInfo.InvariantCulture))] } },
-                            new DetailsElement { Key = "Level", Data = new DetailsTags { Tags = [GetSeverityTag(evt.Severity)] } },
-                            new DetailsElement { Key = "User", Data = new DetailsTags { Tags = [new Tag(evt.UserName ?? "N/A")] } },
-                            new DetailsElement { Key = "Computer", Data = new DetailsTags { Tags = [new Tag(evt.MachineName ?? Environment.MachineName)] } },
-                            new DetailsElement { Key = "Date/Time", Data = new DetailsTags { Tags = [new Tag(evt.TimeCreated.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture))] } },
-                        ],
-                    },
-                });
-            }
+            var items = new List<IListItem>();
 
             if (events.Count == 0)
             {
@@ -117,6 +67,71 @@ internal sealed partial class EventLogListPage : DynamicListPage
                         ? "This log is empty"
                         : string.Format(CultureInfo.InvariantCulture, "No events matching \"{0}\"", searchText),
                 });
+            }
+            else
+            {
+                var grouped = events.GroupBy(e => e.TimeCreated.Date).OrderByDescending(g => g.Key);
+
+                foreach (var dayGroup in grouped)
+                {
+                    var sectionTitle = GetDaySectionTitle(dayGroup.Key);
+                    var dayItems = new List<IListItem>();
+
+                    foreach (var evt in dayGroup)
+                    {
+                        var firstLine = GetFirstLine(evt.Message, 120);
+
+                        var subtitle = string.Format(
+                            CultureInfo.InvariantCulture,
+                            "Event ID {0}  \u00B7  {1}",
+                            evt.Id,
+                            evt.ProviderName);
+
+                        var keepOpenCommand = new AnonymousCommand(() => { })
+                        {
+                            Result = CommandResult.KeepOpen(),
+                        };
+
+                        dayItems.Add(new ListItem(keepOpenCommand)
+                        {
+                            Title = firstLine,
+                            Subtitle = subtitle,
+                            Icon = GetSeverityIcon(evt.Severity),
+                            Tags = [GetTimeTag(evt.TimeCreated)],
+                            MoreCommands = [
+                                new CommandContextItem(new OpenEventViewerCommand(_logName))
+                                {
+                                    Title = "Open in Event Viewer",
+                                    Subtitle = "Open this log in the Windows Event Viewer",
+                                    Icon = new IconInfo("\uE8A7"),
+                                },
+                                new CommandContextItem(new CopyTextCommand(evt.Message))
+                                {
+                                    Title = "Copy message",
+                                },
+                            ],
+                            Details = new Details
+                            {
+                                Title = string.Format(CultureInfo.InvariantCulture, "{0} \u2014 Event {1}", evt.ProviderName, evt.Id),
+                                Body = evt.Message,
+                                Metadata = [
+                                    new DetailsElement { Key = "Event ID", Data = new DetailsLink { Text = evt.Id.ToString(CultureInfo.InvariantCulture) } },
+                                    new DetailsElement { Key = "Level", Data = new DetailsTags { Tags = [GetSeverityTag(evt.Severity)] } },
+                                    new DetailsElement { Key = "Log", Data = new DetailsLink { Text = evt.LogName } },
+                                    new DetailsElement { Key = string.Empty, Data = new DetailsSeparator() },
+                                    new DetailsElement { Key = "Provider", Data = new DetailsLink { Text = evt.ProviderName } },
+                                    new DetailsElement { Key = "Computer", Data = new DetailsLink { Text = evt.MachineName ?? Environment.MachineName } },
+                                    new DetailsElement { Key = "User", Data = new DetailsLink { Text = evt.UserName ?? "N/A" } },
+                                    new DetailsElement { Key = string.Empty, Data = new DetailsSeparator() },
+                                    new DetailsElement { Key = "Date/Time", Data = new DetailsLink { Text = evt.TimeCreated.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture) } },
+                                ],
+                            },
+                        });
+                    }
+
+                    var section = new Section(sectionTitle, dayItems.ToArray());
+                    items.AddRange(section);
+                }
             }
 
             _items = items.ToArray();
@@ -141,12 +156,35 @@ internal sealed partial class EventLogListPage : DynamicListPage
     {
         return severity switch
         {
-            EventSeverity.Critical => new IconInfo("\u2757"),
-            EventSeverity.Error => new IconInfo("\u2757"),
-            EventSeverity.Warning => new IconInfo("\u26A0\uFE0F"),
-            EventSeverity.Information => new IconInfo("\u2139\uFE0F"),
-            _ => new IconInfo("\u2139\uFE0F"),
+            EventSeverity.Critical => IconHelpers.FromRelativePath("Assets\\Critical.svg"),
+            EventSeverity.Error => IconHelpers.FromRelativePath("Assets\\Error.svg"),
+            EventSeverity.Warning => IconHelpers.FromRelativePath("Assets\\Warning.svg"),
+            _ => IconHelpers.FromRelativePath("Assets\\Info.svg"),
         };
+    }
+
+    private static Tag GetTimeTag(DateTime timeCreated)
+    {
+        return new Tag(timeCreated.ToString("h:mm tt", CultureInfo.InvariantCulture))
+        {
+            Icon = new IconInfo("\uE823"),
+        };
+    }
+
+    private static string GetDaySectionTitle(DateTime date)
+    {
+        var today = DateTime.Today;
+        if (date == today)
+        {
+            return "Today";
+        }
+
+        if (date == today.AddDays(-1))
+        {
+            return "Yesterday";
+        }
+
+        return date.ToString("dddd, MMMM d", CultureInfo.CurrentCulture);
     }
 
     private static Tag GetSeverityTag(EventSeverity severity)
@@ -155,23 +193,23 @@ internal sealed partial class EventLogListPage : DynamicListPage
         {
             EventSeverity.Critical => new Tag("Critical")
             {
-                Background = new OptionalColor { HasValue = true, Color = new Color { R = 160, G = 0, B = 0, A = 255 } },
-                Foreground = new OptionalColor { HasValue = true, Color = new Color { R = 255, G = 255, B = 255, A = 255 } },
+                Background = ColorHelpers.FromRgb(160, 0, 0),
+                Foreground = ColorHelpers.FromRgb(255, 255, 255),
             },
             EventSeverity.Error => new Tag("Error")
             {
-                Background = new OptionalColor { HasValue = true, Color = new Color { R = 200, G = 40, B = 40, A = 255 } },
-                Foreground = new OptionalColor { HasValue = true, Color = new Color { R = 255, G = 255, B = 255, A = 255 } },
+                Background = ColorHelpers.FromRgb(200, 40, 40),
+                Foreground = ColorHelpers.FromRgb(255, 255, 255),
             },
             EventSeverity.Warning => new Tag("Warning")
             {
-                Background = new OptionalColor { HasValue = true, Color = new Color { R = 200, G = 160, B = 0, A = 255 } },
-                Foreground = new OptionalColor { HasValue = true, Color = new Color { R = 0, G = 0, B = 0, A = 255 } },
+                Background = ColorHelpers.FromRgb(200, 160, 0),
+                Foreground = ColorHelpers.FromRgb(0, 0, 0),
             },
             _ => new Tag("Info")
             {
-                Background = new OptionalColor { HasValue = true, Color = new Color { R = 60, G = 120, B = 200, A = 255 } },
-                Foreground = new OptionalColor { HasValue = true, Color = new Color { R = 255, G = 255, B = 255, A = 255 } },
+                Background = ColorHelpers.FromRgb(60, 120, 200),
+                Foreground = ColorHelpers.FromRgb(255, 255, 255),
             },
         };
     }
@@ -205,11 +243,11 @@ internal sealed partial class SeverityFilters : Filters
     {
         return
         [
-            new Filter() { Id = "all", Name = "All" },
-            new Filter() { Id = "error", Name = "Errors", Icon = new IconInfo("\u2757") },
-            new Filter() { Id = "warning", Name = "Warnings", Icon = new IconInfo("\u26A0\uFE0F") },
-            new Filter() { Id = "info", Name = "Information", Icon = new IconInfo("\u2139\uFE0F") },
-            new Filter() { Id = "critical", Name = "Critical" },
+            new Filter() { Id = "all", Name = "All", Icon = new IconInfo("\uE71D") },
+            new Filter() { Id = "error", Name = "Errors", Icon = IconHelpers.FromRelativePath("Assets\\Error.svg") },
+            new Filter() { Id = "warning", Name = "Warnings", Icon = IconHelpers.FromRelativePath("Assets\\Warning.svg") },
+            new Filter() { Id = "info", Name = "Information", Icon = IconHelpers.FromRelativePath("Assets\\Info.svg") },
+            new Filter() { Id = "critical", Name = "Critical", Icon = IconHelpers.FromRelativePath("Assets\\Critical.svg") },
         ];
     }
 }
